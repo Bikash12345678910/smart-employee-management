@@ -1,0 +1,53 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Build React Frontend
+        run: |
+          cd employee-management-frontend
+          npm install
+          npm run build
+          mkdir -p ../employee-management-android/app/src/main/assets
+          cp -r dist/* ../employee-management-android/app/src/main/assets/
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Android APK with Gradle
+        run: |
+          cd employee-management-android
+          chmod +x gradlew || true
+          gradle wrapper
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smart-biometric-attendance-apk
+          path: employee-management-android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

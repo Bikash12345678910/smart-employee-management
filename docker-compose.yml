@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  mysql-db:
+    image: mysql:8.0
+    container_name: employee-management-mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: employee_management_db
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_USER: employee_user
+      MYSQL_PASSWORD: employee_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./database/seeds.sql:/docker-entrypoint-initdb.d/02-seeds.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - employee-network
+
+  backend:
+    build:
+      context: ./employee-management-backend
+      dockerfile: Dockerfile
+    container_name: employee-management-backend
+    restart: always
+    environment:
+      SPRING_PROFILES_ACTIVE: mysql
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/employee_management_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: employee_user
+      SPRING_DATASOURCE_PASSWORD: employee_password
+      APP_JWT_SECRET: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql-db:
+        condition: service_healthy
+    networks:
+      - employee-network
+
+  frontend:
+    build:
+      context: ./employee-management-frontend
+      dockerfile: Dockerfile
+    container_name: employee-management-frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - employee-network
+
+volumes:
+  mysql-data:
+
+networks:
+  employee-network:
+    driver: bridge
