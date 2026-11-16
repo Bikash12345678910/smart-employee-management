@@ -5,6 +5,9 @@ on:
     branches: [ master, main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     name: Build Android APK
@@ -46,11 +49,26 @@ jobs:
         run: |
           cd employee-management-android
           gradle assembleDebug --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/smart-biometric-attendance.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: smart-biometric-attendance-apk
-          path: employee-management-android/app/build/outputs/apk/debug/app-debug.apk
+          path: employee-management-android/app/build/outputs/apk/debug/smart-biometric-attendance.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish Direct APK Download Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "Smart Biometric Attendance Mobile App v1.0.0"
+          body: |
+            ### 📱 Smart Biometric Attendance Android App
+            - **Package Name**: `com.company.smartbiometric`
+            - **Features**: Native Camera Face Biometrics, GPS Geofencing, Fullscreen Kiosk Mode.
+            - **Download**: Click `smart-biometric-attendance.apk` below to install directly on your Android device.
+          files: employee-management-android/app/build/outputs/apk/debug/smart-biometric-attendance.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
