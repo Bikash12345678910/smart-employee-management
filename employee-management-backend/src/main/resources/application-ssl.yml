@@ -1,0 +1,16 @@
+# Optional HTTPS / TLS 1.3 profile for production / POCO M2 Pro LAN HTTPS
+# Generate self-signed keystore with:
+#   keytool -genkeypair -alias smartbiometric -keyalg RSA -keysize 2048 \
+#     -storetype PKCS12 -keystore src/main/resources/keystore.p12 -validity 3650 \
+#     -storepass SmartBio2026! -dname "CN=192.168.1.2, OU=IT, O=ApexBio, L=City, ST=State, C=IN" \
+#     -ext "SAN=IP:192.168.1.2,DNS:localhost"
+server:
+  port: 8443
+  address: 0.0.0.0
+  ssl:
+    enabled: true
+    key-store: classpath:keystore.p12
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:SmartBio2026!}
+    key-store-type: PKCS12
+    key-alias: smartbiometric
+    enabled-protocols: TLSv1.3,TLSv1.2

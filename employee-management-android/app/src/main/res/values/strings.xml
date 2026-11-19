@@ -1,4 +1,7 @@
 <resources>
-    <string name="app_name">Smart Biometric</string>
-    <string name="default_server_url">http://192.168.1.2:3000</string>
+    <string name="app_name">Smart Biometric Terminal</string>
+    <string name="default_api_base_url">http://192.168.1.2:8080/</string>
+    <string name="default_terminal_id">POCO-M2-PRO-01</string>
+    <string name="default_terminal_key">POCO_TERMINAL_KEY_2026_SECURE</string>
+    <string name="biometric_consent_text">I explicitly consent to capture and store an AES-256 encrypted mathematical geometry template of my face solely for workplace attendance verification. Raw photos are not stored on the server, and I may request deletion through HR/Admin at any time.</string>
 </resources>

@@ -62,13 +62,13 @@ jobs:
       - name: Publish Direct APK Download Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "Smart Biometric Attendance Mobile App v1.0.0"
+          tag_name: v2.0.0
+          name: "Smart Biometric POCO M2 Pro Kiosk APK v2.0.0"
           body: |
-            ### 📱 Smart Biometric Attendance Android App
-            - **Package Name**: `com.company.smartbiometric`
-            - **Features**: Native Camera Face Biometrics, GPS Geofencing, Fullscreen Kiosk Mode.
-            - **Download**: Click `smart-biometric-attendance.apk` below to install directly on your Android device.
+            ### 📱 Smart Fingerprint & Face Shared Attendance Terminal (POCO M2 Pro)
+            - **1-Tap Check-In / 4-Quick-Taps Check-Out** with configurable tap timeout
+            - **Android BiometricPrompt** (device-level fingerprint confirmation) + **CameraX Front-Camera 1:1 Face Verification & Blink/Head-Turn Liveness**
+            - **AES-256-GCM Encrypted Face Templates**, Biometric Consent, Replay Protection & Server-Side Timestamps
           files: employee-management-android/app/build/outputs/apk/debug/smart-biometric-attendance.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
