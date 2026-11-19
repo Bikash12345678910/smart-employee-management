@@ -108,6 +108,27 @@ public class AuthService {
         }
     }
 
+    public java.util.Map<String, Object> sendVerificationOtpWithConfig(java.util.Map<String, String> payload) {
+        String target = payload.get("target");
+        String type = payload.get("type");
+        if ("EMAIL".equalsIgnoreCase(type)) {
+            return emailOtpService.generateAndSendOtpWithConfig(
+                    target,
+                    payload.get("gmailSenderEmail"),
+                    payload.get("gmailAppPassword")
+            );
+        } else {
+            return smsOtpService.generateAndSendOtpWithConfig(
+                    target,
+                    payload.get("smsProvider"),
+                    payload.get("fast2SmsApiKey"),
+                    payload.get("twilioAccountSid"),
+                    payload.get("twilioAuthToken"),
+                    payload.get("twilioFromNumber")
+            );
+        }
+    }
+
     public boolean verifyOtp(String target, String type, String code) {
         if ("EMAIL".equalsIgnoreCase(type)) {
             return emailOtpService.verifyOtp(target, code);

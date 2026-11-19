@@ -29,11 +29,14 @@ public class AuthController {
     }
 
     @PostMapping("/send-otp")
-    public ResponseEntity<ApiResponse<String>> sendOtp(@RequestBody Map<String, String> payload) {
-        String target = payload.get("target");
-        String type = payload.get("type"); // EMAIL or PHONE
-        String code = authService.sendVerificationOtp(target, type);
-        return ResponseEntity.ok(ApiResponse.ok("OTP dispatched successfully", code));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> sendOtp(@RequestBody Map<String, String> payload) {
+        try {
+            Map<String, Object> result = authService.sendVerificationOtpWithConfig(payload);
+            String msg = (String) result.getOrDefault("message", "OTP dispatched successfully");
+            return ResponseEntity.ok(ApiResponse.ok(msg, result));
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        }
     }
 
     @PostMapping("/verify-otp")

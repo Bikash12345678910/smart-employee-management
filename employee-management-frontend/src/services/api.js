@@ -63,7 +63,7 @@ export const downloadAuthenticatedFile = async (url, filename) => {
 
 export const authApi = {
   login: (data) => api.post('/auth/login', data),
-  sendOtp: (target, type) => api.post('/auth/send-otp', { target, type }),
+  sendOtp: (target, type, gatewayConfig = {}) => api.post('/auth/send-otp', { target, type, ...gatewayConfig }),
   verifyOtp: (target, type, code) => api.post('/auth/verify-otp', { target, type, code }),
   getCurrentUser: () => api.get('/auth/me'),
 };

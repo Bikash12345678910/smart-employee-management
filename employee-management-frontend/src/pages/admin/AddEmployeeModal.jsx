@@ -68,6 +68,35 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
   const [emailOtpSent, setEmailOtpSent] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [emailVerified, setEmailVerified] = useState(false);
+  const [phoneStatusMsg, setPhoneStatusMsg] = useState('');
+  const [emailStatusMsg, setEmailStatusMsg] = useState('');
+  const [sendingPhoneOtp, setSendingPhoneOtp] = useState(false);
+  const [sendingEmailOtp, setSendingEmailOtp] = useState(false);
+
+  // Direct SMS & Gmail Gateway Credentials (Admin can enter directly here)
+  const [gatewayConfig, setGatewayConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('otp_gateway_config');
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return {
+      smsProvider: 'FAST2SMS',
+      fast2SmsApiKey: '',
+      twilioAccountSid: '',
+      twilioAuthToken: '',
+      twilioFromNumber: '',
+      gmailSenderEmail: '',
+      gmailAppPassword: '',
+    };
+  });
+
+  const updateGatewayField = (field, value) => {
+    setGatewayConfig(prev => {
+      const next = { ...prev, [field]: value };
+      localStorage.setItem('otp_gateway_config', JSON.stringify(next));
+      return next;
+    });
+  };
 
   // Biometric Modals
   const [showFaceModal, setShowFaceModal] = useState(false);
@@ -176,54 +205,76 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
   };
 
   const handleSendPhoneOtp = async () => {
-    if (!formData.phoneNumber) {
-      alert("Please enter phone number first");
+    if (!formData.phoneNumber || formData.phoneNumber.trim().length < 8) {
+      setPhoneStatusMsg("Please enter a valid mobile number first.");
       return;
     }
+    setSendingPhoneOtp(true);
+    setPhoneStatusMsg('');
     try {
-      const res = await authApi.sendOtp(formData.phoneNumber, "PHONE");
+      const res = await authApi.sendOtp(formData.phoneNumber.trim(), "PHONE", gatewayConfig);
       setPhoneOtpSent(true);
-      const code = res.data || "123456";
-      setFormData(prev => ({ ...prev, phoneOtp: code }));
-      alert(`Direct Phone OTP dispatched to ${formData.phoneNumber}!\nVerification Code: ${code}`);
+      setFormData(prev => ({ ...prev, phoneOtp: '' }));
+      if (res.data?.deliveredLive) {
+        setPhoneStatusMsg(`6-digit SMS OTP sent directly to ${formData.phoneNumber.trim()} via ${res.data.channel}. Enter the OTP received on phone.`);
+      } else {
+        setPhoneStatusMsg(`SMS Gateway key not entered yet. Enter Fast2SMS / Twilio details above to send real SMS. (Dev Server OTP: ${res.data?.code || 'check console'})`);
+      }
     } catch (e) {
-      alert("Failed to send OTP: " + e.message);
+      setPhoneStatusMsg("Failed to send SMS OTP: " + e.message);
+    } finally {
+      setSendingPhoneOtp(false);
     }
   };
 
   const handleVerifyPhoneOtp = async () => {
+    if (!formData.phoneOtp || formData.phoneOtp.trim().length !== 6) {
+      setPhoneStatusMsg("Please enter the 6-digit OTP received on the phone.");
+      return;
+    }
     try {
-      await authApi.verifyOtp(formData.phoneNumber, "PHONE", formData.phoneOtp || "123456");
+      await authApi.verifyOtp(formData.phoneNumber.trim(), "PHONE", formData.phoneOtp.trim());
       setPhoneVerified(true);
-      alert("Phone OTP Verified Successfully!");
+      setPhoneStatusMsg("Phone number verified successfully!");
     } catch (e) {
-      alert("Invalid OTP");
+      setPhoneStatusMsg("Invalid or expired 6-digit OTP.");
     }
   };
 
   const handleSendEmailOtp = async () => {
-    if (!formData.email) {
-      alert("Please enter email first");
+    if (!formData.email || !formData.email.includes('@')) {
+      setEmailStatusMsg("Please enter a valid employee Gmail / email address first.");
       return;
     }
+    setSendingEmailOtp(true);
+    setEmailStatusMsg('');
     try {
-      const res = await authApi.sendOtp(formData.email, "EMAIL");
+      const res = await authApi.sendOtp(formData.email.trim(), "EMAIL", gatewayConfig);
       setEmailOtpSent(true);
-      const code = res.data || "123456";
-      setFormData(prev => ({ ...prev, emailOtp: code }));
-      alert(`Direct Email OTP dispatched to ${formData.email}!\nVerification Code: ${code}`);
+      setFormData(prev => ({ ...prev, emailOtp: '' }));
+      if (res.data?.deliveredLive) {
+        setEmailStatusMsg(`6-digit OTP sent directly to ${formData.email.trim()} via Gmail! Check inbox and enter OTP.`);
+      } else {
+        setEmailStatusMsg(`Gmail credentials not entered yet. Enter Sender Gmail & 16-char App Password above to send real email. (Dev Server OTP: ${res.data?.code || 'check console'})`);
+      }
     } catch (e) {
-      alert("Failed to send OTP: " + e.message);
+      setEmailStatusMsg("Failed to send Gmail OTP: " + e.message);
+    } finally {
+      setSendingEmailOtp(false);
     }
   };
 
   const handleVerifyEmailOtp = async () => {
+    if (!formData.emailOtp || formData.emailOtp.trim().length !== 6) {
+      setEmailStatusMsg("Please enter the 6-digit OTP received in Gmail.");
+      return;
+    }
     try {
-      await authApi.verifyOtp(formData.email, "EMAIL", formData.emailOtp || "123456");
+      await authApi.verifyOtp(formData.email.trim(), "EMAIL", formData.emailOtp.trim());
       setEmailVerified(true);
-      alert("Email OTP Verified Successfully!");
+      setEmailStatusMsg("Email verified successfully!");
     } catch (e) {
-      alert("Invalid OTP");
+      setEmailStatusMsg("Invalid or expired 6-digit OTP.");
     }
   };
 
@@ -406,17 +457,120 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
             </div>
           </div>
 
-          {/* SECTION 2: Verification (Phone & Email OTP) */}
+          {/* SECTION 2: Verification (Direct Phone SMS & Gmail OTP) */}
           <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
             <h4 className="text-xs font-bold uppercase tracking-wider text-primary-600 dark:text-primary-400 flex items-center gap-1.5">
-              <ShieldCheck className="w-3.5 h-3.5" /> 2. Contact & Identity Verification
+              <ShieldCheck className="w-3.5 h-3.5" /> 2. Direct Phone SMS &amp; Gmail OTP Verification
             </h4>
+
+            {/* Gateway Credentials Input Box (Saved locally so admin enters once) */}
+            <div className="p-3.5 rounded-2xl bg-indigo-50/60 dark:bg-slate-800/80 border border-indigo-200/70 dark:border-slate-700 space-y-2.5">
+              <div className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300">
+                Live Delivery Gateway Settings (Enter your Gmail &amp; SMS Gateway credentials to send OTP directly)
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Sender Gmail Address (for Email OTP)
+                  </label>
+                  <input
+                    type="email"
+                    value={gatewayConfig.gmailSenderEmail}
+                    onChange={e => updateGatewayField('gmailSenderEmail', e.target.value)}
+                    placeholder="yourcompany@gmail.com"
+                    className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Gmail 16-Char App Password (Google Account &rarr; Security)
+                  </label>
+                  <input
+                    type="password"
+                    value={gatewayConfig.gmailAppPassword}
+                    onChange={e => updateGatewayField('gmailAppPassword', e.target.value)}
+                    placeholder="xxxx xxxx xxxx xxxx"
+                    className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    SMS Gateway Provider (for Phone OTP)
+                  </label>
+                  <select
+                    value={gatewayConfig.smsProvider}
+                    onChange={e => updateGatewayField('smsProvider', e.target.value)}
+                    className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                  >
+                    <option value="FAST2SMS">Fast2SMS (India Mobile Numbers)</option>
+                    <option value="TWILIO">Twilio (Global SMS)</option>
+                  </select>
+                </div>
+
+                {gatewayConfig.smsProvider === 'FAST2SMS' ? (
+                  <div>
+                    <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                      Fast2SMS API Key
+                    </label>
+                    <input
+                      type="password"
+                      value={gatewayConfig.fast2SmsApiKey}
+                      onChange={e => updateGatewayField('fast2SmsApiKey', e.target.value)}
+                      placeholder="Paste your Fast2SMS API Key"
+                      className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono"
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        Twilio Account SID
+                      </label>
+                      <input
+                        type="text"
+                        value={gatewayConfig.twilioAccountSid}
+                        onChange={e => updateGatewayField('twilioAccountSid', e.target.value)}
+                        placeholder="ACxxxxxxxxxxxxxxxx"
+                        className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        Twilio Auth Token
+                      </label>
+                      <input
+                        type="password"
+                        value={gatewayConfig.twilioAuthToken}
+                        onChange={e => updateGatewayField('twilioAuthToken', e.target.value)}
+                        placeholder="Twilio Auth Token"
+                        className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                        Twilio From Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        value={gatewayConfig.twilioFromNumber}
+                        onChange={e => updateGatewayField('twilioFromNumber', e.target.value)}
+                        placeholder="+1xxxxxxxxxx"
+                        className="w-full text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Phone Verification */}
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Phone Number *
+                  Employee Phone Number *
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -424,16 +578,17 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
                     required
                     value={formData.phoneNumber}
                     onChange={e => setFormData({ ...formData, phoneNumber: e.target.value })}
-                    placeholder="+1 (555) 000-0000"
+                    placeholder="+91 9876543210"
                     className="flex-1 text-xs px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   />
                   {!phoneVerified && (
                     <button
                       type="button"
+                      disabled={sendingPhoneOtp}
                       onClick={handleSendPhoneOtp}
-                      className="px-2.5 py-1.5 rounded-xl bg-primary-600 text-white text-[11px] font-medium hover:bg-primary-700 whitespace-nowrap"
+                      className="px-2.5 py-1.5 rounded-xl bg-primary-600 text-white text-[11px] font-medium hover:bg-primary-700 whitespace-nowrap disabled:opacity-50"
                     >
-                      {phoneOtpSent ? "Resend" : "Send OTP"}
+                      {sendingPhoneOtp ? "Sending..." : phoneOtpSent ? "Resend" : "Send OTP"}
                     </button>
                   )}
                 </div>
@@ -442,9 +597,10 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
                   <div className="flex gap-2 pt-1">
                     <input
                       type="text"
-                      placeholder="Enter 6-digit OTP"
+                      maxLength={6}
+                      placeholder="Enter 6-digit SMS OTP"
                       value={formData.phoneOtp}
-                      onChange={e => setFormData({ ...formData, phoneOtp: e.target.value })}
+                      onChange={e => setFormData({ ...formData, phoneOtp: e.target.value.replace(/\D/g, '') })}
                       className="flex-1 text-xs px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono"
                     />
                     <button
@@ -454,6 +610,12 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
                     >
                       Verify
                     </button>
+                  </div>
+                )}
+
+                {phoneStatusMsg && (
+                  <div className={`text-[11px] font-medium ${phoneVerified ? 'text-emerald-600' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {phoneStatusMsg}
                   </div>
                 )}
 
@@ -467,7 +629,7 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
               {/* Email Verification */}
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
                 <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  Email Address *
+                  Employee Gmail / Email Address *
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -475,16 +637,17 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
                     required
                     value={formData.email}
                     onChange={e => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="employee@apextech.com"
+                    placeholder="employee@gmail.com"
                     className="flex-1 text-xs px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
                   />
                   {!emailVerified && (
                     <button
                       type="button"
+                      disabled={sendingEmailOtp}
                       onClick={handleSendEmailOtp}
-                      className="px-2.5 py-1.5 rounded-xl bg-primary-600 text-white text-[11px] font-medium hover:bg-primary-700 whitespace-nowrap"
+                      className="px-2.5 py-1.5 rounded-xl bg-primary-600 text-white text-[11px] font-medium hover:bg-primary-700 whitespace-nowrap disabled:opacity-50"
                     >
-                      {emailOtpSent ? "Resend" : "Send OTP"}
+                      {sendingEmailOtp ? "Sending..." : emailOtpSent ? "Resend" : "Send OTP"}
                     </button>
                   )}
                 </div>
@@ -493,9 +656,10 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
                   <div className="flex gap-2 pt-1">
                     <input
                       type="text"
-                      placeholder="Enter 6-digit OTP"
+                      maxLength={6}
+                      placeholder="Enter 6-digit Gmail OTP"
                       value={formData.emailOtp}
-                      onChange={e => setFormData({ ...formData, emailOtp: e.target.value })}
+                      onChange={e => setFormData({ ...formData, emailOtp: e.target.value.replace(/\D/g, '') })}
                       className="flex-1 text-xs px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 font-mono"
                     />
                     <button
@@ -505,6 +669,12 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
                     >
                       Verify
                     </button>
+                  </div>
+                )}
+
+                {emailStatusMsg && (
+                  <div className={`text-[11px] font-medium ${emailVerified ? 'text-emerald-600' : 'text-amber-600 dark:text-amber-400'}`}>
+                    {emailStatusMsg}
                   </div>
                 )}
 

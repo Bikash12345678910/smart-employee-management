@@ -164,8 +164,11 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* Monthly Salary Payout */}
-        <div className="glass-card p-5 flex items-center gap-4">
+        {/* Monthly Salary Overview (Connected to Payslips Actual Payable Salary) */}
+        <div
+          onClick={() => navigate('/admin/payslips')}
+          className="glass-card p-5 flex items-center gap-4 cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-600 transition-all"
+        >
           <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
             <DollarSign className="w-6 h-6" />
           </div>
@@ -174,10 +177,10 @@ export default function AdminDashboard() {
               Monthly Salary Overview
             </div>
             <div className="text-2xl font-bold font-mono text-slate-900 dark:text-slate-50">
-              ₹{Number(stats?.monthlySalaryPayout || 0).toLocaleString('en-IN')}
+              ₹{Number(stats?.monthlySalaryPayout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-              Finalized & planned payroll
+            <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+              Connected to Payslips Actual Payable Salary &rarr;
             </p>
           </div>
         </div>
@@ -349,7 +352,7 @@ export default function AdminDashboard() {
 
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400">
-                      ${Number(emp.agreedMonthlySalary).toLocaleString()}/mo
+                      ₹{Number(emp.agreedMonthlySalary).toLocaleString('en-IN')}/mo
                     </span>
                     <StatusBadge status={emp.employmentStatus} />
                   </div>

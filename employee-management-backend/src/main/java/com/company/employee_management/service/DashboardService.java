@@ -26,6 +26,7 @@ public class DashboardService {
     private final EmployeeService employeeService;
     private final AttendanceService attendanceService;
     private final HolidayService holidayService;
+    private final PayslipService payslipService;
 
     public DashboardService(EmployeeRepository employeeRepository,
                             AttendanceRepository attendanceRepository,
@@ -36,7 +37,8 @@ public class DashboardService {
                             EmployeeBreakRepository breakRepository,
                             EmployeeService employeeService,
                             AttendanceService attendanceService,
-                            HolidayService holidayService) {
+                            HolidayService holidayService,
+                            PayslipService payslipService) {
         this.employeeRepository = employeeRepository;
         this.attendanceRepository = attendanceRepository;
         this.departmentRepository = departmentRepository;
@@ -47,6 +49,7 @@ public class DashboardService {
         this.employeeService = employeeService;
         this.attendanceService = attendanceService;
         this.holidayService = holidayService;
+        this.payslipService = payslipService;
     }
 
     public AdminDashboardStatsDTO getAdminDashboardStats() {
@@ -89,18 +92,14 @@ public class DashboardService {
         double pct = (totalEmp > 0) ? Math.round(((double) present / totalEmp) * 1000.0) / 10.0 : 0.0;
         dto.setAttendancePercentage(pct);
 
-        // Salary payout for current month
+        // Monthly Salary Overview directly connected to Payslips Actual Payable Salary
         int curMonth = today.getMonthValue();
         int curYear = today.getYear();
-        BigDecimal totalPayout = payslipRepository.getTotalSalaryPayoutForMonth(curMonth, curYear);
-        if (totalPayout == null) {
-            // Estimate based on agreed salary of active employees
-            List<Employee> all = employeeRepository.findAll();
-            totalPayout = all.stream()
-                    .map(Employee::getAgreedMonthlySalary)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-        }
+        List<SalaryCalculationDTO> salaryCalcs = payslipService.getSalaryCalculations(curMonth, curYear);
+        BigDecimal totalPayout = salaryCalcs.stream()
+                .map(SalaryCalculationDTO::getActualPayableSalary)
+                .filter(Objects::nonNull)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         dto.setMonthlySalaryPayout(totalPayout);
 
         dto.setTotalDepartments((int) departmentRepository.count());
