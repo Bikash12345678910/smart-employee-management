@@ -65,6 +65,7 @@ export const authApi = {
   login: (data) => api.post('/auth/login', data),
   sendOtp: (target, type) => api.post('/auth/send-otp', { target, type }),
   verifyOtp: (target, type, code) => api.post('/auth/verify-otp', { target, type, code }),
+  loginWithOtp: (target, type, code) => api.post('/auth/login-with-otp', { target, type, code }),
   getCurrentUser: () => api.get('/auth/me'),
 };
 

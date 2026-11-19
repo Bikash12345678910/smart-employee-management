@@ -115,4 +115,63 @@ public class AuthService {
             return smsOtpService.verifyOtp(target, code);
         }
     }
+
+    @Transactional
+    public AuthResponse loginWithOtp(String target, String type, String code) {
+        boolean verified = verifyOtp(target, type, code);
+        if (!verified) {
+            throw new BadRequestException("Invalid or expired 6-digit OTP. Please request a new OTP.");
+        }
+
+        Optional<Employee> empOpt;
+        if ("EMAIL".equalsIgnoreCase(type)) {
+            empOpt = employeeRepository.findByEmail(target.trim().toLowerCase());
+        } else {
+            empOpt = employeeRepository.findByPhoneNumber(target.trim());
+            if (empOpt.isEmpty()) {
+                String cleanDigits = target.replaceAll("\\D+", "");
+                empOpt = employeeRepository.findAll().stream()
+                        .filter(e -> e.getPhoneNumber() != null && !cleanDigits.isEmpty()
+                                && e.getPhoneNumber().replaceAll("\\D+", "").endsWith(cleanDigits.length() > 10
+                                ? cleanDigits.substring(cleanDigits.length() - 10) : cleanDigits))
+                        .findFirst();
+            }
+        }
+
+        Employee emp = empOpt.orElseThrow(() ->
+                new BadRequestException("OTP verified, but no employee account is registered with: " + target));
+
+        User user = emp.getUser();
+        if (user == null) {
+            user = userRepository.findByEmail(emp.getEmail())
+                    .orElseThrow(() -> new BadRequestException("User account not linked to employee: " + emp.getEmployeeCode()));
+        }
+
+        if (!Boolean.TRUE.equals(user.getIsActive()) || !Boolean.TRUE.equals(emp.getIsActive())) {
+            throw new BadRequestException("Employee account is deactivated.");
+        }
+
+        com.company.employee_management.security.UserPrincipal principal =
+                com.company.employee_management.security.UserPrincipal.create(user);
+        Authentication auth = new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(auth);
+        String jwt = tokenProvider.generateToken(auth, true);
+
+        user.setLastLogin(LocalDateTime.now());
+        userRepository.save(user);
+
+        auditLogService.logAction(user.getUsername(), "OTP_LOGIN", "USER", user.getId().toString(),
+                "Successful employee login via " + type.toUpperCase() + " OTP");
+
+        return new AuthResponse(
+                jwt,
+                user.getUsername(),
+                user.getEmail(),
+                user.getRole().getName(),
+                emp.getId(),
+                emp.getEmployeeCode(),
+                emp.getFullName(),
+                emp.getProfilePhotoUrl()
+        );
+    }
 }

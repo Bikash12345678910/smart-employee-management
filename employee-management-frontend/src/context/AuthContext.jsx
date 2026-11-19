@@ -31,6 +31,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const loginWithOtp = async (target, type, code) => {
+    setLoading(true);
+    try {
+      const res = await authApi.loginWithOtp(target, type, code);
+      if (res.success && res.data) {
+        const { token, ...userData } = res.data;
+        setToken(token);
+        setUser(userData);
+        localStorage.setItem('company_auth_token', token);
+        localStorage.setItem('company_auth_user', JSON.stringify(userData));
+        return { success: true, user: userData };
+      }
+      return { success: false, message: res.message || 'OTP Login failed' };
+    } catch (err) {
+      return { success: false, message: err.message || 'OTP authentication error' };
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -56,6 +76,7 @@ export const AuthProvider = ({ children }) => {
         token,
         loading,
         login,
+        loginWithOtp,
         logout,
         updateCurrentUser,
         isAdmin,
