@@ -33,10 +33,7 @@ public class AuthController {
         String target = payload.get("target");
         String type = payload.get("type"); // EMAIL or PHONE
         String code = authService.sendVerificationOtp(target, type);
-        String msg = "EMAIL".equalsIgnoreCase(type)
-                ? "6-digit OTP sent to Gmail (" + target + ")"
-                : "6-digit OTP sent via SMS to " + target;
-        return ResponseEntity.ok(ApiResponse.ok(msg, code));
+        return ResponseEntity.ok(ApiResponse.ok("OTP dispatched successfully", code));
     }
 
     @PostMapping("/verify-otp")
@@ -46,22 +43,10 @@ public class AuthController {
         String code = payload.get("code");
         boolean valid = authService.verifyOtp(target, type, code);
         if (valid) {
-            String msg = "EMAIL".equalsIgnoreCase(type)
-                    ? "Email verified successfully"
-                    : "Phone number verified successfully — you may continue to fingerprint attendance or login";
-            return ResponseEntity.ok(ApiResponse.ok(msg, true));
+            return ResponseEntity.ok(ApiResponse.ok("OTP verified successfully", true));
         } else {
-            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired 6-digit OTP"));
+            return ResponseEntity.badRequest().body(ApiResponse.error("Invalid or expired OTP"));
         }
-    }
-
-    @PostMapping("/login-with-otp")
-    public ResponseEntity<ApiResponse<AuthResponse>> loginWithOtp(@RequestBody Map<String, String> payload) {
-        String target = payload.get("target");
-        String type = payload.get("type"); // PHONE or EMAIL
-        String code = payload.get("code");
-        AuthResponse response = authService.loginWithOtp(target, type, code);
-        return ResponseEntity.ok(ApiResponse.ok("OTP verified and logged in successfully", response));
     }
 
     @GetMapping("/me")
