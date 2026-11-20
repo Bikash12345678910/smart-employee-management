@@ -120,6 +120,7 @@ public class PayslipService {
         }
 
         // Normal working time dynamically connected to Company Settings (Standard Days * Full-Day Hours * 60)
+        CompanySetting settings = companySettingRepository.findAll().stream().findFirst().orElse(null);
         int fullDayHrs = (settings != null && settings.getFullDayWorkingHours() != null && settings.getFullDayWorkingHours() > 0)
                 ? settings.getFullDayWorkingHours() : 8;
         int normalWorkingMinutes = standardWorkingDays * fullDayHrs * 60;
