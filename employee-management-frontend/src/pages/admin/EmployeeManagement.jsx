@@ -211,7 +211,6 @@ export default function EmployeeManagement() {
                   </div>
                 </th>
                 <th scope="col" className="px-4 py-3.5">Contact Details</th>
-                <th scope="col" className="px-4 py-3.5">Department & Role</th>
                 <th scope="col" className="px-4 py-3.5">Protected Financials (Masked)</th>
                 <th scope="col" className="px-4 py-3.5">Biometrics</th>
                 <th scope="col" className="px-4 py-3.5 cursor-pointer select-none" onClick={() => handleSort('employmentStatus')}>
@@ -227,14 +226,14 @@ export default function EmployeeManagement() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan="7" className="px-4 py-12 text-center text-slate-400">
                     <div className="w-6 h-6 border-2 border-primary-500/20 border-t-primary-600 rounded-full animate-spin mx-auto mb-2" />
                     Loading employee records...
                   </td>
                 </tr>
               ) : employees.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan="7" className="px-4 py-12 text-center text-slate-400">
                     No matching employees found.
                   </td>
                 </tr>
@@ -274,12 +273,6 @@ export default function EmployeeManagement() {
                     <td className="px-4 py-3.5 whitespace-nowrap">
                       <div className="text-slate-900 dark:text-slate-100">{emp.email}</div>
                       <div className="text-[10px] text-slate-400">{emp.phoneNumber}</div>
-                    </td>
-
-                    {/* Department & Role */}
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <div className="font-medium text-slate-800 dark:text-slate-200">{emp.departmentName}</div>
-                      <div className="text-[10px] text-slate-400">{emp.designationTitle}</div>
                     </td>
 
                     {/* Masked Sensitive Financials */}

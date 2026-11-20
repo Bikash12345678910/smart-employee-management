@@ -130,22 +130,28 @@ export default function HolidayManagement() {
     setErrorMsg('');
     setSubmitting(true);
     try {
+      const parsedYear = Number(holidayDate.split('-')[0]) || currentYear;
       if (editId) {
         await adminApi.updateHoliday(editId, {
-          holidayName,
+          holidayName: holidayName.trim(),
           holidayDate,
-          description
+          description: description.trim(),
+          year: parsedYear
         });
       } else {
         await adminApi.addHoliday({
-          holidayName,
+          holidayName: holidayName.trim(),
           holidayDate,
-          description,
-          year: new Date(holidayDate).getFullYear()
+          description: description.trim(),
+          year: parsedYear
         });
       }
       setShowModal(false);
-      fetchHolidays();
+      if (parsedYear !== currentYear) {
+        setCurrentYear(parsedYear);
+      } else {
+        await fetchHolidays();
+      }
     } catch (err) {
       setErrorMsg("Error saving holiday: " + err.message);
     } finally {

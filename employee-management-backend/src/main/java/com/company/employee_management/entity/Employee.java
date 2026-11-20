@@ -41,7 +41,7 @@ public class Employee {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String address;
 
-    @Column(name = "profile_photo_url", columnDefinition = "TEXT")
+    @Column(name = "profile_photo_url", columnDefinition = "LONGTEXT")
     private String profilePhotoUrl;
 
     // Employment

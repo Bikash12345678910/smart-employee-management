@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { adminApi, authApi } from '../../services/api';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import FaceScannerModal from '../../components/biometrics/FaceScannerModal';
 import FingerprintScannerModal from '../../components/biometrics/FingerprintScannerModal';
 import {
@@ -16,9 +18,12 @@ import {
   X,
   Sparkles,
   ShieldCheck,
-  Check
+  Check,
+  FileText
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departments = [], initialData = null }) {
   const isEdit = !!initialData;
@@ -104,6 +109,33 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [photoUploadStatus, setPhotoUploadStatus] = useState('');
+
+  const handleProfilePhotoPdfUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      setPhotoUploadStatus('Please select a PDF (.pdf) file for Profile Photo.');
+      return;
+    }
+    setPhotoUploadStatus('Converting PDF profile photo to image...');
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const pngDataUrl = canvas.toDataURL('image/png');
+      setFormData(prev => ({ ...prev, profilePhotoUrl: pngDataUrl }));
+      setPhotoUploadStatus(`Loaded "${file.name}" (converted to image for DB storage).`);
+    } catch (err) {
+      setPhotoUploadStatus('Failed to read PDF: ' + err.message);
+    }
+  };
 
   useEffect(() => {
     if (initialData) {
@@ -315,8 +347,8 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
           phoneNumber: formData.phoneNumber,
           address: formData.address,
           profilePhotoUrl: formData.profilePhotoUrl,
-          departmentId: Number(formData.departmentId),
-          designationId: Number(formData.designationId),
+          departmentId: Number(formData.departmentId) || departments[0]?.id || 1,
+          designationId: Number(formData.designationId) || designations[0]?.id || 1,
           employmentStatus: formData.employmentStatus,
           agreedMonthlySalary: parseFloat(formData.agreedMonthlySalary),
           bankAccountNumber: formData.bankAccountNumber,
@@ -326,8 +358,8 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
       } else {
         const createdRes = await adminApi.createEmployee({
           ...formData,
-          departmentId: Number(formData.departmentId),
-          designationId: Number(formData.designationId),
+          departmentId: Number(formData.departmentId) || departments[0]?.id || 1,
+          designationId: Number(formData.designationId) || designations[0]?.id || 1,
           agreedMonthlySalary: parseFloat(formData.agreedMonthlySalary),
           username: formData.username || `${formData.firstName.toLowerCase()}.${formData.lastName.toLowerCase()}`
         });
@@ -453,15 +485,34 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
                 </select>
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Profile Photo URL</label>
-                <input
-                  type="text"
-                  value={formData.profilePhotoUrl}
-                  onChange={e => setFormData({ ...formData, profilePhotoUrl: e.target.value })}
-                  placeholder="https://..."
-                  className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500"
-                />
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Profile Photo (PDF Format)
+                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/60">
+                  {formData.profilePhotoUrl ? (
+                    <img
+                      src={formData.profilePhotoUrl}
+                      alt="Profile preview"
+                      className="w-11 h-11 rounded-full object-cover ring-2 ring-primary-500/40 flex-shrink-0"
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-400 flex-shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                  )}
+                  <div className="flex-1 space-y-1">
+                    <input
+                      type="file"
+                      accept="application/pdf,.pdf"
+                      onChange={handleProfilePhotoPdfUpload}
+                      className="block w-full text-xs text-slate-700 dark:text-slate-200 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-primary-600 file:text-white hover:file:bg-primary-700 cursor-pointer"
+                    />
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400">
+                      {photoUploadStatus || 'Upload employee profile photo as a PDF (.pdf) file — automatically converted and stored as image.'}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="sm:col-span-2">
@@ -714,7 +765,7 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
               <Building className="w-3.5 h-3.5" /> 3. Employment & Payroll Configuration
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                   Employee Code (Auto-assigned)
@@ -726,20 +777,6 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
                   placeholder="Auto-generated (e.g. EMP007)"
                   className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-primary-600 dark:text-primary-400 font-mono font-bold"
                 />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Designation *</label>
-                <select
-                  required
-                  value={formData.designationId}
-                  onChange={e => setFormData({ ...formData, designationId: e.target.value })}
-                  className="w-full text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                >
-                  {designations.map(d => (
-                    <option key={d.id} value={d.id}>{d.title}</option>
-                  ))}
-                </select>
               </div>
 
               <div>
