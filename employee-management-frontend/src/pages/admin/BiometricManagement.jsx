@@ -73,14 +73,19 @@ export default function BiometricManagement() {
   const [formData, setFormData] = useState(initialForm);
   const [formErrors, setFormErrors] = useState({});
   const [savingDevice, setSavingDevice] = useState(false);
+  const [companySettings, setCompanySettings] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [devRes, empRes] = await Promise.all([
+      const [devRes, empRes, settingsRes] = await Promise.all([
         adminApi.getBiometricDevices(),
-        adminApi.getEmployees({ size: 100 })
+        adminApi.getEmployees({ size: 100 }),
+        adminApi.getSettings().catch(() => ({ success: false }))
       ]);
+      if (settingsRes?.success && settingsRes?.data) {
+        setCompanySettings(settingsRes.data);
+      }
       if (devRes.success) setDevices(devRes.data);
       if (empRes.success) {
         setEmployees(empRes.data.content);
@@ -662,11 +667,16 @@ export default function BiometricManagement() {
 
               <button
                 type="button"
+                disabled={companySettings?.enableFaceAttendance === false}
                 onClick={() => setShowFaceModal(true)}
-                className="w-full py-2.5 text-xs font-semibold rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white shadow-md shadow-cyan-600/20 transition-all flex items-center justify-center gap-2"
+                className="w-full py-2.5 text-xs font-semibold rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white shadow-md shadow-cyan-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Camera className="w-4 h-4" />
-                {selectedEmployee.isFaceRegistered ? "Re-enroll Face Biometric" : "Open Camera & Capture Face"}
+                {companySettings?.enableFaceAttendance === false
+                  ? 'Face Attendance Disabled (Company Settings)'
+                  : selectedEmployee.isFaceRegistered
+                  ? 'Re-enroll Face Biometric'
+                  : 'Open Camera & Capture Face'}
               </button>
             </div>
 
@@ -707,11 +717,16 @@ export default function BiometricManagement() {
 
               <button
                 type="button"
+                disabled={companySettings?.enableFingerprintAttendance === false}
                 onClick={() => setShowFpModal(true)}
-                className="w-full py-2.5 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2"
+                className="w-full py-2.5 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Fingerprint className="w-4 h-4" />
-                {selectedEmployee.isFingerprintRegistered ? "Re-scan Fingerprint" : "Connect Device & Enroll Fingerprint"}
+                {companySettings?.enableFingerprintAttendance === false
+                  ? 'Fingerprint Attendance Disabled (Company Settings)'
+                  : selectedEmployee.isFingerprintRegistered
+                  ? 'Re-scan Fingerprint'
+                  : 'Connect Device & Enroll Fingerprint'}
               </button>
             </div>
           </div>

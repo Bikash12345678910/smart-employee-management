@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { adminApi } from '../../services/api';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import {
   Settings,
   Building,
@@ -10,9 +12,13 @@ import {
   CheckCircle2,
   AlertCircle,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  Upload,
+  FileText
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export default function CompanySettings() {
   const [settings, setSettings] = useState(null);
@@ -20,6 +26,44 @@ export default function CompanySettings() {
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [error, setError] = useState(null);
+  const [logoStatus, setLogoStatus] = useState('');
+
+  const handleLogoFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setLogoStatus('Converting company logo to image format...');
+
+    try {
+      if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        const pngDataUrl = canvas.toDataURL('image/png');
+        handleChange('companyLogoUrl', pngDataUrl);
+        setLogoStatus('PDF converted to PNG image! Click "Save Company Configuration" to store in DB.');
+      } else if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          handleChange('companyLogoUrl', reader.result);
+          setLogoStatus('Logo image loaded! Click "Save Company Configuration" to store in DB.');
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setError('Please upload a PDF (.pdf) or image file (.png, .jpg) for the Company Logo.');
+        setLogoStatus('');
+      }
+    } catch (err) {
+      setError('Failed to convert PDF logo to image: ' + err.message);
+      setLogoStatus('');
+    }
+  };
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -139,14 +183,33 @@ export default function CompanySettings() {
             </div>
 
             <div>
-              <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">Company Logo URL</label>
-              <input
-                type="text"
-                value={settings.companyLogoUrl || ''}
-                onChange={e => handleChange('companyLogoUrl', e.target.value)}
-                placeholder="https://..."
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-              />
+              <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                Company Logo (Upload PDF &rarr; Auto-Converted &amp; Saved as PNG Image in DB)
+              </label>
+              <div className="flex items-center gap-3">
+                <label className="flex-1 cursor-pointer px-3 py-2 rounded-xl border border-dashed border-primary-400 bg-primary-50/40 dark:bg-slate-800 text-primary-700 dark:text-primary-300 font-semibold flex items-center justify-center gap-2 hover:bg-primary-50 dark:hover:bg-slate-750 transition-colors">
+                  <Upload className="w-4 h-4" />
+                  <span>Upload Logo PDF (.pdf) or Image</span>
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf,image/png,image/jpeg"
+                    onChange={handleLogoFileUpload}
+                    className="hidden"
+                  />
+                </label>
+                {settings.companyLogoUrl && (
+                  <img
+                    src={settings.companyLogoUrl}
+                    alt="Company Logo Preview"
+                    className="w-12 h-12 rounded-xl object-contain bg-white border border-slate-200 dark:border-slate-700 p-1 shadow-xs"
+                  />
+                )}
+              </div>
+              {logoStatus && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-1 flex items-center gap-1">
+                  <FileText className="w-3 h-3" /> {logoStatus}
+                </p>
+              )}
             </div>
 
             <div className="sm:col-span-2">
@@ -382,12 +445,22 @@ export default function CompanySettings() {
             </div>
 
             <div>
-              <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">Overtime Hourly Rate (₹)</label>
+              <label className="block text-slate-600 dark:text-slate-400 font-semibold mb-1">
+                Overtime Hourly Rate ({settings.currencySymbol || '₹'})
+              </label>
               <input
-                type="number"
-                step="0.01"
-                value={settings.overtimeRatePerHour || '200.00'}
-                onChange={e => handleChange('overtimeRatePerHour', parseFloat(e.target.value))}
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 200.00"
+                value={settings.overtimeRatePerHour ?? ''}
+                onChange={e => {
+                  const val = e.target.value.replace(/[^0-9.]/g, '');
+                  handleChange('overtimeRatePerHour', val);
+                }}
+                onBlur={e => {
+                  const parsed = parseFloat(e.target.value);
+                  handleChange('overtimeRatePerHour', isNaN(parsed) ? 0 : parsed);
+                }}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-mono"
               />
             </div>

@@ -237,12 +237,26 @@ public class AttendanceService {
         return mapToDTO(attendance);
     }
 
+    private boolean isWeeklyOffDay(LocalDate date, CompanySetting settings) {
+        String off = (settings != null && settings.getWeeklyOffDays() != null)
+                ? settings.getWeeklyOffDays().trim().toUpperCase() : "SUNDAY";
+        DayOfWeek dow = date.getDayOfWeek();
+        if ("SATURDAY_SUNDAY".equals(off)) {
+            return dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY;
+        }
+        if ("FRIDAY".equals(off)) {
+            return dow == DayOfWeek.FRIDAY;
+        }
+        return dow == DayOfWeek.SUNDAY;
+    }
+
     @Transactional
     public void markAbsentForUnmarkedEmployees(LocalDate date) {
         LocalDate queryDate = (date != null) ? date : LocalDate.now();
         List<Employee> allEmployees = employeeRepository.findAll();
+        CompanySetting settings = companySettingRepository.findAll().stream().findFirst().orElse(null);
         boolean isHoliday = holidayRepository.existsByHolidayDate(queryDate);
-        boolean isSunday = queryDate.getDayOfWeek() == DayOfWeek.SUNDAY;
+        boolean isWeeklyOff = isWeeklyOffDay(queryDate, settings);
 
         for (Employee emp : allEmployees) {
             Optional<Attendance> existing = attendanceRepository.findByEmployeeIdAndAttendanceDate(emp.getId(), queryDate);
@@ -250,9 +264,7 @@ public class AttendanceService {
                 Attendance att = new Attendance();
                 att.setEmployee(emp);
                 att.setAttendanceDate(queryDate);
-                if (isHoliday) {
-                    att.setAttendanceStatus("HOLIDAY");
-                } else if (isSunday) {
+                if (isHoliday || isWeeklyOff) {
                     att.setAttendanceStatus("HOLIDAY");
                 } else {
                     att.setAttendanceStatus("ABSENT");
@@ -319,7 +331,8 @@ public class AttendanceService {
                         default -> code = "P";
                     }
                 } else {
-                    if (holidayDates.contains(d) || d.getDayOfWeek() == DayOfWeek.SUNDAY) {
+                    CompanySetting matrixSettings = companySettingRepository.findAll().stream().findFirst().orElse(null);
+                    if (holidayDates.contains(d) || isWeeklyOffDay(d, matrixSettings)) {
                         code = "HL";
                         holidayCount++;
                     } else if (d.isBefore(LocalDate.now())) {

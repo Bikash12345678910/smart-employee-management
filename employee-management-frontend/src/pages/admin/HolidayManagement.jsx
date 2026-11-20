@@ -24,8 +24,15 @@ export default function HolidayManagement() {
   const [currentMonth, setCurrentMonth] = useState(currentDate.getMonth()); // 0-11
   const [currentYear, setCurrentYear] = useState(currentDate.getFullYear());
   const [holidays, setHolidays] = useState([]);
+  const [weeklyOffDays, setWeeklyOffDays] = useState('SUNDAY');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+
+  const isConfiguredWeeklyOff = (dayOfWeekIndex) => {
+    if (weeklyOffDays === 'SATURDAY_SUNDAY') return dayOfWeekIndex === 0 || dayOfWeekIndex === 6;
+    if (weeklyOffDays === 'FRIDAY') return dayOfWeekIndex === 5;
+    return dayOfWeekIndex === 0;
+  };
 
   // Selected date on calendar
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(null);
@@ -62,6 +69,11 @@ export default function HolidayManagement() {
 
   useEffect(() => {
     fetchHolidays();
+    adminApi.getSettings().then(res => {
+      if (res.success && res.data?.weeklyOffDays) {
+        setWeeklyOffDays(res.data.weeklyOffDays);
+      }
+    }).catch(() => {});
   }, [currentYear]);
 
   const handlePrevMonth = () => {
@@ -272,8 +284,8 @@ export default function HolidayManagement() {
         {/* Days of Week Header */}
         <div className="grid grid-cols-7 gap-1.5 text-center text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 py-1">
           {daysOfWeek.map((day, idx) => (
-            <div key={day} className={`py-1 ${idx === 0 ? 'text-rose-500' : ''}`}>
-              {day}
+            <div key={day} className={`py-1 ${isConfiguredWeeklyOff(idx) ? 'text-rose-500' : ''}`}>
+              {day} {isConfiguredWeeklyOff(idx) ? '(Off)' : ''}
             </div>
           ))}
         </div>
@@ -290,7 +302,7 @@ export default function HolidayManagement() {
             const dayNum = i + 1;
             const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
             const holiday = holidayMap[dateStr];
-            const isSunday = new Date(currentYear, currentMonth, dayNum).getDay() === 0;
+            const isWeeklyOff = isConfiguredWeeklyOff(new Date(currentYear, currentMonth, dayNum).getDay());
 
             return (
               <div
@@ -306,14 +318,14 @@ export default function HolidayManagement() {
                 className={`min-h-[85px] p-2 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
                   holiday
                     ? 'border-indigo-400 dark:border-indigo-600 bg-indigo-50/80 dark:bg-indigo-950/60 shadow-xs'
-                    : isSunday
-                    ? 'border-slate-200/60 dark:border-slate-800 bg-slate-50 dark:bg-slate-850/60'
+                    : isWeeklyOff
+                    ? 'border-rose-200/70 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20'
                     : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-primary-400 dark:hover:border-primary-600'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className={`text-xs font-bold font-mono ${
-                    holiday ? 'text-indigo-700 dark:text-indigo-300' : isSunday ? 'text-rose-500' : 'text-slate-800 dark:text-slate-200'
+                    holiday ? 'text-indigo-700 dark:text-indigo-300' : isWeeklyOff ? 'text-rose-500' : 'text-slate-800 dark:text-slate-200'
                   }`}>
                     {dayNum}
                   </span>
@@ -326,8 +338,8 @@ export default function HolidayManagement() {
                   <div className="mt-1 p-1 rounded-lg bg-indigo-100 dark:bg-indigo-900/80 text-[10px] font-bold text-indigo-900 dark:text-indigo-100 truncate" title={holiday.holidayName}>
                     {holiday.holidayName}
                   </div>
-                ) : isSunday ? (
-                  <div className="text-[10px] text-slate-400 italic">Weekly Off</div>
+                ) : isWeeklyOff ? (
+                  <div className="text-[10px] text-rose-500 font-medium italic">Weekly Off</div>
                 ) : (
                   <div className="text-[10px] text-slate-300 dark:text-slate-600 opacity-0 hover:opacity-100 text-center">
                     + Add

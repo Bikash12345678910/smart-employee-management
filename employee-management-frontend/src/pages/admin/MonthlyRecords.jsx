@@ -24,6 +24,7 @@ export default function MonthlyRecords() {
   const [year, setYear] = useState(currentDate.getFullYear());
   const [search, setSearch] = useState('');
   const [matrixData, setMatrixData] = useState(null);
+  const [companySettings, setCompanySettings] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Quick Daily Entry (Date + Employee + Present/Late/Half Day + Minute Counter)
@@ -35,6 +36,29 @@ export default function MonthlyRecords() {
   const [savingEntry, setSavingEntry] = useState(false);
   const [entryFeedback, setEntryFeedback] = useState(null);
 
+  const formatHHMM = (timeStr, fallback) => {
+    if (!timeStr) return fallback;
+    return String(timeStr).slice(0, 5);
+  };
+
+  const addMinutesToTime = (hhmm, minsToAdd) => {
+    const [h, m] = hhmm.split(':').map(Number);
+    const total = (h * 60 + m + minsToAdd) % (24 * 60);
+    const nh = String(Math.floor(total / 60)).padStart(2, '0');
+    const nm = String(total % 60).padStart(2, '0');
+    return `${nh}:${nm}`;
+  };
+
+  useEffect(() => {
+    adminApi.getSettings().then((res) => {
+      if (res.success && res.data) {
+        setCompanySettings(res.data);
+        setEntryCheckIn(formatHHMM(res.data.shiftStartTime, '09:00'));
+        setEntryCheckOut(formatHHMM(res.data.shiftEndTime, '18:00'));
+      }
+    }).catch(() => {});
+  }, []);
+
   const computeEntryMinutes = () => {
     if (entryStatus === 'ABSENT' || !entryCheckIn || !entryCheckOut) return 0;
     const [inH, inM] = entryCheckIn.split(':').map(Number);
@@ -44,15 +68,20 @@ export default function MonthlyRecords() {
 
   const handleEntryStatusChange = (status) => {
     setEntryStatus(status);
+    const shiftStart = formatHHMM(companySettings?.shiftStartTime, '09:00');
+    const shiftEnd = formatHHMM(companySettings?.shiftEndTime, '18:00');
+    const graceMins = Number(companySettings?.lateArrivalGraceMinutes ?? 15);
+    const halfDayHrs = Number(companySettings?.halfDayThresholdHours ?? 4);
+
     if (status === 'PRESENT') {
-      setEntryCheckIn('09:00');
-      setEntryCheckOut('18:00');
+      setEntryCheckIn(shiftStart);
+      setEntryCheckOut(shiftEnd);
     } else if (status === 'LATE') {
-      setEntryCheckIn('09:30');
-      setEntryCheckOut('18:00');
+      setEntryCheckIn(addMinutesToTime(shiftStart, graceMins + 15));
+      setEntryCheckOut(shiftEnd);
     } else if (status === 'HALF_DAY') {
-      setEntryCheckIn('09:00');
-      setEntryCheckOut('13:00');
+      setEntryCheckIn(shiftStart);
+      setEntryCheckOut(addMinutesToTime(shiftStart, halfDayHrs * 60));
     } else if (status === 'ABSENT') {
       setEntryCheckIn('');
       setEntryCheckOut('');

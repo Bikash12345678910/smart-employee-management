@@ -25,7 +25,7 @@ public class CompanySetting {
     @Column(name = "company_address", columnDefinition = "TEXT", nullable = false)
     private String companyAddress = "100 Tech Park Boulevard, Suite 500, Silicon City, CA";
 
-    @Column(name = "company_logo_url", columnDefinition = "TEXT")
+    @Column(name = "company_logo_url", columnDefinition = "LONGTEXT")
     private String companyLogoUrl;
 
     // Shift Settings

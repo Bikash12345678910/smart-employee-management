@@ -119,19 +119,30 @@ public class PayslipService {
             agreedSalary = new BigDecimal("15000.00");
         }
 
-        // Normal working time: 13200 minutes (220 hours)
-        int normalWorkingMinutes = 13200;
+        // Normal working time dynamically connected to Company Settings (Standard Days * Full-Day Hours * 60)
+        int fullDayHrs = (settings != null && settings.getFullDayWorkingHours() != null && settings.getFullDayWorkingHours() > 0)
+                ? settings.getFullDayWorkingHours() : 8;
+        int normalWorkingMinutes = standardWorkingDays * fullDayHrs * 60;
         if (actualWorkingMinutes == 0 && "Biswanath Manna".equalsIgnoreCase(emp.getFullName())) {
             actualWorkingMinutes = 12000;
         } else if (actualWorkingMinutes == 0 && presentDays > 0) {
-            actualWorkingMinutes = presentDays * 480;
+            actualWorkingMinutes = presentDays * fullDayHrs * 60;
         } else if (actualWorkingMinutes == 0) {
             actualWorkingMinutes = 12000;
         }
 
         int diffMinutes = actualWorkingMinutes - normalWorkingMinutes;
         BigDecimal salaryPerMinute = agreedSalary.divide(BigDecimal.valueOf(normalWorkingMinutes), 4, RoundingMode.HALF_UP);
-        BigDecimal excessOrShortfall = agreedSalary.multiply(BigDecimal.valueOf(diffMinutes)).divide(BigDecimal.valueOf(normalWorkingMinutes), 2, RoundingMode.HALF_UP);
+        BigDecimal overtimeRatePerHour = (settings != null && settings.getOvertimeRatePerHour() != null)
+                ? settings.getOvertimeRatePerHour() : BigDecimal.ZERO;
+        BigDecimal excessOrShortfall;
+        if (diffMinutes > 0 && overtimeRatePerHour.compareTo(BigDecimal.ZERO) > 0) {
+            excessOrShortfall = overtimeRatePerHour.multiply(BigDecimal.valueOf(diffMinutes))
+                    .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+        } else {
+            excessOrShortfall = agreedSalary.multiply(BigDecimal.valueOf(diffMinutes))
+                    .divide(BigDecimal.valueOf(normalWorkingMinutes), 2, RoundingMode.HALF_UP);
+        }
         BigDecimal actualPayableSalary = agreedSalary.add(excessOrShortfall).setScale(2, RoundingMode.HALF_UP);
         if (actualPayableSalary.compareTo(BigDecimal.ZERO) < 0) {
             actualPayableSalary = BigDecimal.ZERO;
@@ -280,6 +291,15 @@ public class PayslipService {
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
 
+        CompanySetting settings = companySettingRepository.findAll().stream().findFirst().orElse(null);
+        int stdDays = (settings != null && settings.getStandardWorkingDays() != null && settings.getStandardWorkingDays() > 0)
+                ? settings.getStandardWorkingDays() : 26;
+        int fullDayHrs = (settings != null && settings.getFullDayWorkingHours() != null && settings.getFullDayWorkingHours() > 0)
+                ? settings.getFullDayWorkingHours() : 8;
+        int normalMinutes = stdDays * fullDayHrs * 60;
+        BigDecimal overtimeRatePerHour = (settings != null && settings.getOvertimeRatePerHour() != null)
+                ? settings.getOvertimeRatePerHour() : BigDecimal.ZERO;
+
         List<Employee> employees = employeeRepository.findAll();
         List<com.company.employee_management.dto.SalaryCalculationDTO> result = new java.util.ArrayList<>();
 
@@ -307,15 +327,21 @@ public class PayslipService {
             if (actualMinutes == 0 && "Biswanath Manna".equalsIgnoreCase(emp.getFullName())) {
                 actualMinutes = 12000;
             } else if (actualMinutes == 0 && !atts.isEmpty()) {
-                actualMinutes = atts.size() * 480;
+                actualMinutes = atts.size() * fullDayHrs * 60;
             } else if (actualMinutes == 0) {
-                actualMinutes = 12000; // Baseline standard demo
+                actualMinutes = 12000;
             }
 
-            int normalMinutes = 13200;
             int diff = actualMinutes - normalMinutes;
             BigDecimal salaryPerMinute = agreed.divide(BigDecimal.valueOf(normalMinutes), 4, RoundingMode.HALF_UP);
-            BigDecimal excessOrShortfall = agreed.multiply(BigDecimal.valueOf(diff)).divide(BigDecimal.valueOf(normalMinutes), 2, RoundingMode.HALF_UP);
+            BigDecimal excessOrShortfall;
+            if (diff > 0 && overtimeRatePerHour.compareTo(BigDecimal.ZERO) > 0) {
+                excessOrShortfall = overtimeRatePerHour.multiply(BigDecimal.valueOf(diff))
+                        .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
+            } else {
+                excessOrShortfall = agreed.multiply(BigDecimal.valueOf(diff))
+                        .divide(BigDecimal.valueOf(normalMinutes), 2, RoundingMode.HALF_UP);
+            }
             BigDecimal actualPayable = agreed.add(excessOrShortfall).setScale(2, RoundingMode.HALF_UP);
             if (actualPayable.compareTo(BigDecimal.ZERO) < 0) {
                 actualPayable = BigDecimal.ZERO;

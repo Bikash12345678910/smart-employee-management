@@ -292,8 +292,8 @@ export default function PayslipManagement() {
           <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
           <span><strong>Calculation Logic:</strong> Salary Per Minute = Agreed Salary &divide; Normal Time &bull; Difference = Actual - Normal &bull; Excess/Shortfall = Diff &times; Rate &bull; Actual Payable = Agreed + Excess/Shortfall</span>
         </div>
-        <span className="font-mono text-[11px] bg-emerald-100 dark:bg-emerald-900 px-2 py-0.5 rounded-md font-bold text-emerald-800 dark:text-emerald-200">
-          Currency: Indian Rupee (INR, ₹)
+        <span className="font-mono text-[11px] bg-emerald-100 dark:bg-emerald-900 px-2.5 py-1 rounded-md font-bold text-emerald-800 dark:text-emerald-200">
+          Currency: {companySettings?.currencyCode || 'INR'} ({companySettings?.currencySymbol || '₹'}) &bull; Overtime: {companySettings?.currencySymbol || '₹'}{Number(companySettings?.overtimeRatePerHour ?? 200).toFixed(2)}/hr &bull; Std: {companySettings?.standardWorkingDays || 26}d &times; {companySettings?.fullDayWorkingHours || 8}h
         </span>
       </div>
 
