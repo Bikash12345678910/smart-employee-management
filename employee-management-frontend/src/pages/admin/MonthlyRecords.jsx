@@ -26,6 +26,73 @@ export default function MonthlyRecords() {
   const [matrixData, setMatrixData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Quick Daily Entry (Date + Employee + Present/Late/Half Day + Minute Counter)
+  const [entryEmpId, setEntryEmpId] = useState('');
+  const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [entryStatus, setEntryStatus] = useState('PRESENT');
+  const [entryCheckIn, setEntryCheckIn] = useState('09:00');
+  const [entryCheckOut, setEntryCheckOut] = useState('18:00');
+  const [savingEntry, setSavingEntry] = useState(false);
+  const [entryFeedback, setEntryFeedback] = useState(null);
+
+  const computeEntryMinutes = () => {
+    if (entryStatus === 'ABSENT' || !entryCheckIn || !entryCheckOut) return 0;
+    const [inH, inM] = entryCheckIn.split(':').map(Number);
+    const [outH, outM] = entryCheckOut.split(':').map(Number);
+    return Math.max(0, (outH * 60 + outM) - (inH * 60 + inM));
+  };
+
+  const handleEntryStatusChange = (status) => {
+    setEntryStatus(status);
+    if (status === 'PRESENT') {
+      setEntryCheckIn('09:00');
+      setEntryCheckOut('18:00');
+    } else if (status === 'LATE') {
+      setEntryCheckIn('09:30');
+      setEntryCheckOut('18:00');
+    } else if (status === 'HALF_DAY') {
+      setEntryCheckIn('09:00');
+      setEntryCheckOut('13:00');
+    } else if (status === 'ABSENT') {
+      setEntryCheckIn('');
+      setEntryCheckOut('');
+    }
+  };
+
+  const handleSaveDailyEntry = async (e) => {
+    e.preventDefault();
+    if (!entryEmpId) {
+      setEntryFeedback({ type: 'error', text: 'Please select an employee first.' });
+      return;
+    }
+    setSavingEntry(true);
+    setEntryFeedback(null);
+    try {
+      const mins = computeEntryMinutes();
+      await adminApi.correctAttendance({
+        employeeId: Number(entryEmpId),
+        attendanceDate: entryDate,
+        checkInTime: entryStatus === 'ABSENT' ? null : `${entryCheckIn}:00`,
+        checkOutTime: entryStatus === 'ABSENT' ? null : `${entryCheckOut}:00`,
+        attendanceStatus: entryStatus,
+        correctionReason: `Monthly Records entry: ${entryStatus} (${mins} mins)`,
+      });
+      setEntryFeedback({
+        type: 'success',
+        text: `Saved ${entryStatus} for ${entryDate} — Counted: ${mins} mins!`,
+      });
+      // Sync calendar to the entered date's month/year and refresh
+      const d = new Date(entryDate);
+      setMonth(d.getMonth() + 1);
+      setYear(d.getFullYear());
+      await fetchMatrix();
+    } catch (err) {
+      setEntryFeedback({ type: 'error', text: err.message || 'Failed to save attendance entry.' });
+    } finally {
+      setSavingEntry(false);
+    }
+  };
+
   // Sync date picker with month/year
   const handleCalendarDateChange = (e) => {
     const val = e.target.value;
@@ -228,6 +295,100 @@ export default function MonthlyRecords() {
             />
           </div>
         </div>
+
+        {/* Direct Date Attendance Entry (Present / Late / Half Day + Auto Minute Count) */}
+        <form
+          onSubmit={handleSaveDailyEntry}
+          className="pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-2.5 items-end"
+        >
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Entry Date</label>
+            <input
+              type="date"
+              required
+              value={entryDate}
+              onChange={(e) => setEntryDate(e.target.value)}
+              className="w-full text-xs px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+            />
+          </div>
+
+          <div className="lg:col-span-2">
+            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Employee</label>
+            <select
+              required
+              value={entryEmpId}
+              onChange={(e) => setEntryEmpId(e.target.value)}
+              className="w-full text-xs px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+            >
+              <option value="">Select Employee...</option>
+              {(matrixData?.records || []).map((rec) => (
+                <option key={rec.employeeId} value={rec.employeeId}>
+                  {rec.employeeName} ({rec.employeeCode})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Status</label>
+            <select
+              value={entryStatus}
+              onChange={(e) => handleEntryStatusChange(e.target.value)}
+              className="w-full text-xs px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-semibold"
+            >
+              <option value="PRESENT">Present</option>
+              <option value="LATE">Late</option>
+              <option value="HALF_DAY">Half Day</option>
+              <option value="ABSENT">Absent</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">Check-In</label>
+            <input
+              type="time"
+              disabled={entryStatus === 'ABSENT'}
+              value={entryCheckIn}
+              onChange={(e) => setEntryCheckIn(e.target.value)}
+              className="w-full text-xs px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 disabled:opacity-40"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-slate-500 mb-1">
+              Check-Out ({computeEntryMinutes()} mins)
+            </label>
+            <input
+              type="time"
+              disabled={entryStatus === 'ABSENT'}
+              value={entryCheckOut}
+              onChange={(e) => setEntryCheckOut(e.target.value)}
+              className="w-full text-xs px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 disabled:opacity-40"
+            />
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              disabled={savingEntry}
+              className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs disabled:opacity-50"
+            >
+              {savingEntry ? 'Saving...' : `Save (${computeEntryMinutes()}m)`}
+            </button>
+          </div>
+        </form>
+
+        {entryFeedback && (
+          <div
+            className={`p-2.5 rounded-xl text-xs font-semibold ${
+              entryFeedback.type === 'success'
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+            }`}
+          >
+            {entryFeedback.text}
+          </div>
+        )}
 
         {/* Legend Indicators */}
         <div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400">

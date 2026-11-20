@@ -283,7 +283,7 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
       ...prev,
       liveFaceData: base64,
       registerFace: true,
-      profilePhotoUrl: prev.profilePhotoUrl || base64
+      profilePhotoUrl: base64
     }));
   };
 
@@ -291,6 +291,7 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
     setFormData(prev => ({
       ...prev,
       registerFingerprint: true,
+      fingerprintTemplate: fpData.template,
       fingerprintDeviceId: fpData.deviceId
     }));
   };
@@ -306,6 +307,7 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
 
     setSubmitting(true);
     try {
+      let savedEmployeeId = initialData?.id;
       if (isEdit) {
         await adminApi.updateEmployee(initialData.id, {
           firstName: formData.firstName,
@@ -322,14 +324,33 @@ export default function AddEmployeeModal({ isOpen, onClose, onSuccess, departmen
           bankName: formData.bankName
         });
       } else {
-        await adminApi.createEmployee({
+        const createdRes = await adminApi.createEmployee({
           ...formData,
           departmentId: Number(formData.departmentId),
           designationId: Number(formData.designationId),
           agreedMonthlySalary: parseFloat(formData.agreedMonthlySalary),
           username: formData.username || `${formData.firstName.toLowerCase()}.${formData.lastName.toLowerCase()}`
         });
+        savedEmployeeId = createdRes?.data?.id;
       }
+
+      // Explicitly store approved clear face photo and fingerprint template in MySQL biometric_registrations
+      if (savedEmployeeId && formData.registerFace && formData.liveFaceData) {
+        await adminApi.enrollBiometric({
+          employeeId: savedEmployeeId,
+          biometricType: 'FACE',
+          rawSampleOrTemplate: formData.liveFaceData,
+        });
+      }
+      if (savedEmployeeId && formData.registerFingerprint) {
+        await adminApi.enrollBiometric({
+          employeeId: savedEmployeeId,
+          biometricType: 'FINGERPRINT',
+          deviceId: formData.fingerprintDeviceId || 1,
+          rawSampleOrTemplate: formData.fingerprintTemplate || ('FP_SENSOR_' + savedEmployeeId + '_' + Date.now()),
+        });
+      }
+
       onSuccess();
     } catch (err) {
       setError(err.message);

@@ -1284,7 +1284,9 @@ export default function BiometricManagement() {
         isOpen={showFaceModal}
         onClose={() => setShowFaceModal(false)}
         onCapture={handleFaceEnrolled}
-        title={`Face Enrolment: ${selectedEmployee?.fullName || ''}`}
+        referencePhotoUrl={selectedEmployee?.profilePhotoUrl || null}
+        title={`Live Face Register: ${selectedEmployee?.fullName || ''}`}
+        subtitle="Must be clear and match the employee's stored face photo"
       />
 
       <FingerprintScannerModal
