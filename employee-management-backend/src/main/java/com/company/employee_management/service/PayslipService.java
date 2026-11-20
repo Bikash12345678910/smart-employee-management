@@ -124,13 +124,7 @@ public class PayslipService {
         int fullDayHrs = (settings != null && settings.getFullDayWorkingHours() != null && settings.getFullDayWorkingHours() > 0)
                 ? settings.getFullDayWorkingHours() : 8;
         int normalWorkingMinutes = standardWorkingDays * fullDayHrs * 60;
-        if (actualWorkingMinutes == 0 && "Biswanath Manna".equalsIgnoreCase(emp.getFullName())) {
-            actualWorkingMinutes = 12000;
-        } else if (actualWorkingMinutes == 0 && presentDays > 0) {
-            actualWorkingMinutes = presentDays * fullDayHrs * 60;
-        } else if (actualWorkingMinutes == 0) {
-            actualWorkingMinutes = 12000;
-        }
+        // Actual Working Time (Minute) strictly synced with Monthly Records total working minutes (no fake fallback)
 
         int diffMinutes = actualWorkingMinutes - normalWorkingMinutes;
         BigDecimal salaryPerMinute = agreedSalary.divide(BigDecimal.valueOf(normalWorkingMinutes), 4, RoundingMode.HALF_UP);
@@ -324,14 +318,7 @@ public class PayslipService {
                 int m = a.getWorkingMinutes() != null ? a.getWorkingMinutes() : 0;
                 actualMinutes += (h * 60 + m);
             }
-
-            if (actualMinutes == 0 && "Biswanath Manna".equalsIgnoreCase(emp.getFullName())) {
-                actualMinutes = 12000;
-            } else if (actualMinutes == 0 && !atts.isEmpty()) {
-                actualMinutes = atts.size() * fullDayHrs * 60;
-            } else if (actualMinutes == 0) {
-                actualMinutes = 12000;
-            }
+            // Strictly synced with Monthly Records Total Working Minutes (exact same sum)
 
             int diff = actualMinutes - normalMinutes;
             BigDecimal salaryPerMinute = agreed.divide(BigDecimal.valueOf(normalMinutes), 4, RoundingMode.HALF_UP);

@@ -74,6 +74,8 @@ export default function BiometricManagement() {
   const [formErrors, setFormErrors] = useState({});
   const [savingDevice, setSavingDevice] = useState(false);
   const [companySettings, setCompanySettings] = useState(null);
+  const [punchMode, setPunchMode] = useState(null); // null (ENROLL) | 'CHECK_IN' | 'CHECK_OUT'
+  const [lastPunchResult, setLastPunchResult] = useState(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -215,6 +217,33 @@ export default function BiometricManagement() {
   const handleFaceEnrolled = async (base64) => {
     if (!selectedEmpId) return;
     try {
+      if (punchMode === 'CHECK_IN' || punchMode === 'CHECK_OUT') {
+        const res = await adminApi.punchAttendance({
+          employeeId: selectedEmpId,
+          punchType: punchMode,
+          verificationMethod: 'FACE_RECOGNITION',
+          biometricToken: base64
+        });
+        const att = res.data || {};
+        const totalMins = (att.workingHours || 0) * 60 + (att.workingMinutes || 0);
+        setLastPunchResult({
+          employeeName: selectedEmployee?.fullName,
+          action: punchMode,
+          method: 'Face Match Verified',
+          checkInTime: att.checkInTime || '-',
+          checkOutTime: att.checkOutTime || '-',
+          totalMinutes: totalMins,
+          status: att.attendanceStatus || 'PRESENT'
+        });
+        setMessage({
+          type: 'success',
+          text: `${punchMode === 'CHECK_IN' ? 'Check-In' : 'Check-Out'} verified via Face Match for ${selectedEmployee?.fullName}! Attendance, Monthly Records (${totalMins} mins) & Payslips auto-updated.`
+        });
+        setPunchMode(null);
+        fetchData();
+        return;
+      }
+
       await adminApi.enrollBiometric({
         employeeId: selectedEmpId,
         biometricType: 'FACE',
@@ -223,23 +252,53 @@ export default function BiometricManagement() {
       setMessage({ type: 'success', text: 'Face biometric vector enrolled successfully!' });
       fetchData();
     } catch (err) {
-      setMessage({ type: 'error', text: 'Enrollment failed: ' + err.message });
+      setPunchMode(null);
+      setMessage({ type: 'error', text: (punchMode ? `${punchMode} failed: ` : 'Enrollment failed: ') + err.message });
     }
   };
 
   const handleFingerprintEnrolled = async (fpData) => {
     if (!selectedEmpId) return;
     try {
+      if (punchMode === 'CHECK_IN' || punchMode === 'CHECK_OUT') {
+        const res = await adminApi.punchAttendance({
+          employeeId: selectedEmpId,
+          punchType: punchMode,
+          verificationMethod: 'FINGERPRINT',
+          deviceId: fpData.deviceId,
+          biometricToken: fpData.template
+        });
+        const att = res.data || {};
+        const totalMins = (att.workingHours || 0) * 60 + (att.workingMinutes || 0);
+        setLastPunchResult({
+          employeeName: selectedEmployee?.fullName,
+          action: punchMode,
+          method: 'Fingerprint Match Verified',
+          checkInTime: att.checkInTime || '-',
+          checkOutTime: att.checkOutTime || '-',
+          totalMinutes: totalMins,
+          status: att.attendanceStatus || 'PRESENT'
+        });
+        setMessage({
+          type: 'success',
+          text: `${punchMode === 'CHECK_IN' ? 'Check-In' : 'Check-Out'} verified via Fingerprint for ${selectedEmployee?.fullName}! Attendance, Monthly Records (${totalMins} mins) & Payslips auto-updated.`
+        });
+        setPunchMode(null);
+        fetchData();
+        return;
+      }
+
       await adminApi.enrollBiometric({
         employeeId: selectedEmpId,
         biometricType: 'FINGERPRINT',
         deviceId: fpData.deviceId,
         rawSampleOrTemplate: fpData.template
       });
-      setMessage({ type: 'success', text: 'Fingerprint ridge template stored in device slot!' });
+      setMessage({ type: 'success', text: 'Fingerprint ridge template stored in database!' });
       fetchData();
     } catch (err) {
-      setMessage({ type: 'error', text: 'Enrollment failed: ' + err.message });
+      setPunchMode(null);
+      setMessage({ type: 'error', text: (punchMode ? `${punchMode} failed: ` : 'Enrollment failed: ') + err.message });
     }
   };
 
@@ -718,7 +777,10 @@ export default function BiometricManagement() {
               <button
                 type="button"
                 disabled={companySettings?.enableFingerprintAttendance === false}
-                onClick={() => setShowFpModal(true)}
+                onClick={() => {
+                  setPunchMode(null);
+                  setShowFpModal(true);
+                }}
                 className="w-full py-2.5 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Fingerprint className="w-4 h-4" />
@@ -729,6 +791,108 @@ export default function BiometricManagement() {
                   : 'Connect Device & Enroll Fingerprint'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* ===================================================================== */}
+        {/* LIVE BIOMETRIC CHECK-IN & CHECK-OUT (Matched to Stored Face & Finger) */}
+        {/* Auto-updates Attendance, Monthly Records Total Minutes & Payslips     */}
+        {/* ===================================================================== */}
+        {selectedEmployee && (
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Live Biometric Check-In &amp; Check-Out (Matched with Registered Face &amp; Fingerprint)
+              </h3>
+              <p className="text-xs text-slate-500">
+                Verifies against {selectedEmployee.fullName}&apos;s stored face &amp; fingerprint from Add Employee, then automatically updates Attendance, Monthly Records Total Working Minutes &amp; Payslips.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* CHECK-IN FIELD (Face + Fingerprint) */}
+              <div className="p-4 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/25 border border-emerald-200 dark:border-emerald-800/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                    1. Biometric Check-In
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
+                    Auto-updates Attendance &amp; Minutes
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    disabled={companySettings?.enableFaceAttendance === false || !selectedEmployee.profilePhotoUrl}
+                    onClick={() => {
+                      setPunchMode('CHECK_IN');
+                      setShowFaceModal(true);
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Camera className="w-4 h-4" /> Face Check-In
+                  </button>
+                  <button
+                    type="button"
+                    disabled={companySettings?.enableFingerprintAttendance === false || !selectedEmployee.isFingerprintRegistered}
+                    onClick={() => {
+                      setPunchMode('CHECK_IN');
+                      setShowFpModal(true);
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Fingerprint className="w-4 h-4" /> Fingerprint Check-In
+                  </button>
+                </div>
+              </div>
+
+              {/* CHECK-OUT FIELD (Face + Fingerprint) */}
+              <div className="p-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/25 border border-amber-200 dark:border-amber-800/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold uppercase tracking-wider text-amber-700 dark:text-amber-300">
+                    2. Biometric Check-Out
+                  </span>
+                  <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400">
+                    Recounts Total Working Minutes
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    disabled={companySettings?.enableFaceAttendance === false || !selectedEmployee.profilePhotoUrl}
+                    onClick={() => {
+                      setPunchMode('CHECK_OUT');
+                      setShowFaceModal(true);
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Camera className="w-4 h-4" /> Face Check-Out
+                  </button>
+                  <button
+                    type="button"
+                    disabled={companySettings?.enableFingerprintAttendance === false || !selectedEmployee.isFingerprintRegistered}
+                    onClick={() => {
+                      setPunchMode('CHECK_OUT');
+                      setShowFpModal(true);
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <Fingerprint className="w-4 h-4" /> Fingerprint Check-Out
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {lastPunchResult && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-xs flex flex-wrap items-center justify-between gap-2 text-emerald-900 dark:text-emerald-200">
+                <span className="font-bold">
+                  {lastPunchResult.employeeName} &bull; {lastPunchResult.action} ({lastPunchResult.method})
+                </span>
+                <span className="font-mono">
+                  In: {lastPunchResult.checkInTime} | Out: {lastPunchResult.checkOutTime} | Total Working Time: <strong>{lastPunchResult.totalMinutes} mins</strong> ({lastPunchResult.status})
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1297,19 +1461,37 @@ export default function BiometricManagement() {
       {/* Scanner Modals */}
       <FaceScannerModal
         isOpen={showFaceModal}
-        onClose={() => setShowFaceModal(false)}
+        onClose={() => {
+          setShowFaceModal(false);
+          setPunchMode(null);
+        }}
         onCapture={handleFaceEnrolled}
         referencePhotoUrl={selectedEmployee?.profilePhotoUrl || null}
-        title={`Live Face Register: ${selectedEmployee?.fullName || ''}`}
+        title={
+          punchMode === 'CHECK_IN'
+            ? `Face Check-In Verification: ${selectedEmployee?.fullName || ''}`
+            : punchMode === 'CHECK_OUT'
+            ? `Face Check-Out Verification: ${selectedEmployee?.fullName || ''}`
+            : `Live Face Register: ${selectedEmployee?.fullName || ''}`
+        }
         subtitle="Must be clear and match the employee's stored face photo"
       />
 
       <FingerprintScannerModal
         isOpen={showFpModal}
-        onClose={() => setShowFpModal(false)}
+        onClose={() => {
+          setShowFpModal(false);
+          setPunchMode(null);
+        }}
         onScanComplete={handleFingerprintEnrolled}
         devices={devices}
-        title={`Fingerprint Enrolment: ${selectedEmployee?.fullName || ''}`}
+        title={
+          punchMode === 'CHECK_IN'
+            ? `Fingerprint Check-In: ${selectedEmployee?.fullName || ''}`
+            : punchMode === 'CHECK_OUT'
+            ? `Fingerprint Check-Out: ${selectedEmployee?.fullName || ''}`
+            : `Fingerprint Enrolment: ${selectedEmployee?.fullName || ''}`
+        }
       />
     </div>
   );
