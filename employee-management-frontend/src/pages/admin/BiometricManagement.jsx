@@ -219,25 +219,27 @@ export default function BiometricManagement() {
     try {
       if (punchMode === 'CHECK_IN' || punchMode === 'CHECK_OUT') {
         const res = await adminApi.punchAttendance({
-          employeeId: selectedEmpId,
+          employeeId: Number(selectedEmpId),
           punchType: punchMode,
-          verificationMethod: 'FACE_RECOGNITION',
-          biometricToken: base64
+          punchMethod: 'FACE',
+          biometricData: base64
         });
         const att = res.data || {};
         const totalMins = (att.workingHours || 0) * 60 + (att.workingMinutes || 0);
         setLastPunchResult({
+          approved: true,
           employeeName: selectedEmployee?.fullName,
           action: punchMode,
           method: 'Face Match Verified',
           checkInTime: att.checkInTime || '-',
           checkOutTime: att.checkOutTime || '-',
           totalMinutes: totalMins,
+          punchCount: att.punches ? att.punches.length : 1,
           status: att.attendanceStatus || 'PRESENT'
         });
         setMessage({
           type: 'success',
-          text: `${punchMode === 'CHECK_IN' ? 'Check-In' : 'Check-Out'} verified via Face Match for ${selectedEmployee?.fullName}! Attendance, Monthly Records (${totalMins} mins) & Payslips auto-updated.`
+          text: `APPROVED: ${punchMode === 'CHECK_IN' ? 'Check-In' : 'Check-Out'} verified via Face Match for ${selectedEmployee?.fullName}! Attendance Management, Monthly Records (${totalMins} mins) & Payslips auto-updated.`
         });
         setPunchMode(null);
         fetchData();
@@ -252,8 +254,17 @@ export default function BiometricManagement() {
       setMessage({ type: 'success', text: 'Face biometric vector enrolled successfully!' });
       fetchData();
     } catch (err) {
+      if (punchMode) {
+        setLastPunchResult({
+          approved: false,
+          employeeName: selectedEmployee?.fullName,
+          action: punchMode,
+          method: 'Face Verification',
+          reason: err.message
+        });
+      }
       setPunchMode(null);
-      setMessage({ type: 'error', text: (punchMode ? `${punchMode} failed: ` : 'Enrollment failed: ') + err.message });
+      setMessage({ type: 'error', text: (punchMode ? `REJECTED (${punchMode}): ` : 'Enrollment failed: ') + err.message });
     }
   };
 
@@ -262,26 +273,28 @@ export default function BiometricManagement() {
     try {
       if (punchMode === 'CHECK_IN' || punchMode === 'CHECK_OUT') {
         const res = await adminApi.punchAttendance({
-          employeeId: selectedEmpId,
+          employeeId: Number(selectedEmpId),
           punchType: punchMode,
-          verificationMethod: 'FINGERPRINT',
+          punchMethod: 'FINGERPRINT',
           deviceId: fpData.deviceId,
-          biometricToken: fpData.template
+          biometricData: fpData.template
         });
         const att = res.data || {};
         const totalMins = (att.workingHours || 0) * 60 + (att.workingMinutes || 0);
         setLastPunchResult({
+          approved: true,
           employeeName: selectedEmployee?.fullName,
           action: punchMode,
           method: 'Fingerprint Match Verified',
           checkInTime: att.checkInTime || '-',
           checkOutTime: att.checkOutTime || '-',
           totalMinutes: totalMins,
+          punchCount: att.punches ? att.punches.length : 1,
           status: att.attendanceStatus || 'PRESENT'
         });
         setMessage({
           type: 'success',
-          text: `${punchMode === 'CHECK_IN' ? 'Check-In' : 'Check-Out'} verified via Fingerprint for ${selectedEmployee?.fullName}! Attendance, Monthly Records (${totalMins} mins) & Payslips auto-updated.`
+          text: `APPROVED: ${punchMode === 'CHECK_IN' ? 'Check-In' : 'Check-Out'} verified via Fingerprint for ${selectedEmployee?.fullName}! Attendance Management, Monthly Records (${totalMins} mins) & Payslips auto-updated.`
         });
         setPunchMode(null);
         fetchData();
@@ -297,8 +310,17 @@ export default function BiometricManagement() {
       setMessage({ type: 'success', text: 'Fingerprint ridge template stored in database!' });
       fetchData();
     } catch (err) {
+      if (punchMode) {
+        setLastPunchResult({
+          approved: false,
+          employeeName: selectedEmployee?.fullName,
+          action: punchMode,
+          method: 'Fingerprint Verification',
+          reason: err.message
+        });
+      }
       setPunchMode(null);
-      setMessage({ type: 'error', text: (punchMode ? `${punchMode} failed: ` : 'Enrollment failed: ') + err.message });
+      setMessage({ type: 'error', text: (punchMode ? `REJECTED (${punchMode}): ` : 'Enrollment failed: ') + err.message });
     }
   };
 
@@ -823,8 +845,14 @@ export default function BiometricManagement() {
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    disabled={companySettings?.enableFaceAttendance === false || !selectedEmployee.profilePhotoUrl}
+                    disabled={companySettings?.enableFaceAttendance === false}
                     onClick={() => {
+                      if (!selectedEmployee.isFaceRegistered && !selectedEmployee.profilePhotoUrl) {
+                        const reason = `${selectedEmployee.fullName}'s face is not saved in Employee Records. Register face first.`;
+                        setLastPunchResult({ approved: false, employeeName: selectedEmployee.fullName, action: 'CHECK_IN', method: 'Face Verification', reason });
+                        setMessage({ type: 'error', text: 'REJECTED: ' + reason });
+                        return;
+                      }
                       setPunchMode('CHECK_IN');
                       setShowFaceModal(true);
                     }}
@@ -834,8 +862,14 @@ export default function BiometricManagement() {
                   </button>
                   <button
                     type="button"
-                    disabled={companySettings?.enableFingerprintAttendance === false || !selectedEmployee.isFingerprintRegistered}
+                    disabled={companySettings?.enableFingerprintAttendance === false}
                     onClick={() => {
+                      if (!selectedEmployee.isFingerprintRegistered) {
+                        const reason = `${selectedEmployee.fullName}'s fingerprint is not saved in Employee Records. Register fingerprint first.`;
+                        setLastPunchResult({ approved: false, employeeName: selectedEmployee.fullName, action: 'CHECK_IN', method: 'Fingerprint Verification', reason });
+                        setMessage({ type: 'error', text: 'REJECTED: ' + reason });
+                        return;
+                      }
                       setPunchMode('CHECK_IN');
                       setShowFpModal(true);
                     }}
@@ -859,8 +893,14 @@ export default function BiometricManagement() {
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
-                    disabled={companySettings?.enableFaceAttendance === false || !selectedEmployee.profilePhotoUrl}
+                    disabled={companySettings?.enableFaceAttendance === false}
                     onClick={() => {
+                      if (!selectedEmployee.isFaceRegistered && !selectedEmployee.profilePhotoUrl) {
+                        const reason = `${selectedEmployee.fullName}'s face is not saved in Employee Records. Register face first.`;
+                        setLastPunchResult({ approved: false, employeeName: selectedEmployee.fullName, action: 'CHECK_OUT', method: 'Face Verification', reason });
+                        setMessage({ type: 'error', text: 'REJECTED: ' + reason });
+                        return;
+                      }
                       setPunchMode('CHECK_OUT');
                       setShowFaceModal(true);
                     }}
@@ -870,8 +910,14 @@ export default function BiometricManagement() {
                   </button>
                   <button
                     type="button"
-                    disabled={companySettings?.enableFingerprintAttendance === false || !selectedEmployee.isFingerprintRegistered}
+                    disabled={companySettings?.enableFingerprintAttendance === false}
                     onClick={() => {
+                      if (!selectedEmployee.isFingerprintRegistered) {
+                        const reason = `${selectedEmployee.fullName}'s fingerprint is not saved in Employee Records. Register fingerprint first.`;
+                        setLastPunchResult({ approved: false, employeeName: selectedEmployee.fullName, action: 'CHECK_OUT', method: 'Fingerprint Verification', reason });
+                        setMessage({ type: 'error', text: 'REJECTED: ' + reason });
+                        return;
+                      }
                       setPunchMode('CHECK_OUT');
                       setShowFpModal(true);
                     }}
@@ -884,14 +930,23 @@ export default function BiometricManagement() {
             </div>
 
             {lastPunchResult && (
-              <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-xs flex flex-wrap items-center justify-between gap-2 text-emerald-900 dark:text-emerald-200">
-                <span className="font-bold">
-                  {lastPunchResult.employeeName} &bull; {lastPunchResult.action} ({lastPunchResult.method})
-                </span>
-                <span className="font-mono">
-                  In: {lastPunchResult.checkInTime} | Out: {lastPunchResult.checkOutTime} | Total Working Time: <strong>{lastPunchResult.totalMinutes} mins</strong> ({lastPunchResult.status})
-                </span>
-              </div>
+              lastPunchResult.approved ? (
+                <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-xs flex flex-wrap items-center justify-between gap-2 text-emerald-900 dark:text-emerald-200">
+                  <span className="font-bold">
+                    APPROVED &bull; {lastPunchResult.employeeName} &bull; {lastPunchResult.action} ({lastPunchResult.method})
+                  </span>
+                  <span className="font-mono">
+                    In: {lastPunchResult.checkInTime} | Out: {lastPunchResult.checkOutTime} | Actual Working Time: <strong>{lastPunchResult.totalMinutes} mins</strong> ({lastPunchResult.status})
+                  </span>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-700 text-xs flex flex-wrap items-center justify-between gap-2 text-rose-900 dark:text-rose-200">
+                  <span className="font-bold">
+                    REJECTED &bull; {lastPunchResult.employeeName} &bull; {lastPunchResult.action} ({lastPunchResult.method})
+                  </span>
+                  <span>{lastPunchResult.reason}</span>
+                </div>
+              )
             )}
           </div>
         )}

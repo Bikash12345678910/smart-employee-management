@@ -362,15 +362,32 @@ export default function AttendanceManagement() {
       </div>
 
       {/* Attendance Table */}
+      {(() => {
+        const maxPunchCols = Math.max(
+          2,
+          ...attendances.map((a) => (Array.isArray(a.punches) ? a.punches.length : 0))
+        );
+        const totalCols = 7 + maxPunchCols;
+
+        const formatPunchTime = (eventTime) => {
+          if (!eventTime) return '-';
+          const s = String(eventTime);
+          return s.includes('T') ? s.split('T')[1].slice(0, 8) : s.slice(0, 8);
+        };
+
+        return (
       <div className="glass-card overflow-hidden border border-slate-200 dark:border-slate-800">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-600 dark:text-slate-300">
             <thead className="bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
               <tr>
-                <th scope="col" className="px-4 py-3.5">Employee</th>
+                <th scope="col" className="px-4 py-3.5">Registered Employee</th>
                 <th scope="col" className="px-4 py-3.5">Emp ID</th>
-                <th scope="col" className="px-4 py-3.5">First Check In</th>
-                <th scope="col" className="px-4 py-3.5">Last Check Out</th>
+                {Array.from({ length: maxPunchCols }).map((_, idx) => (
+                  <th key={`punch-h-${idx}`} scope="col" className="px-3 py-3.5 whitespace-nowrap">
+                    Punch {idx + 1} ({idx % 2 === 0 ? 'In' : 'Out'})
+                  </th>
+                ))}
                 <th scope="col" className="px-4 py-3.5">Total Working Minutes</th>
                 <th scope="col" className="px-4 py-3.5">Multiple Sessions</th>
                 <th scope="col" className="px-4 py-3.5">Status</th>
@@ -382,14 +399,14 @@ export default function AttendanceManagement() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {loading ? (
                 <tr>
-                  <td colSpan="9" className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={totalCols} className="px-4 py-12 text-center text-slate-400">
                     <div className="w-6 h-6 border-2 border-primary-500/20 border-t-primary-600 rounded-full animate-spin mx-auto mb-2" />
                     Loading attendance entries...
                   </td>
                 </tr>
               ) : attendances.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={totalCols} className="px-4 py-12 text-center text-slate-400">
                     No attendance records for selected criteria.
                   </td>
                 </tr>
@@ -398,10 +415,11 @@ export default function AttendanceManagement() {
                   const totalMinutes = item.totalWorkingMinutes !== undefined
                     ? item.totalWorkingMinutes
                     : (item.workingHours || 0) * 60 + (item.workingMinutes || 0);
+                  const rowPunches = Array.isArray(item.punches) ? item.punches : [];
 
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
-                      {/* Employee Name */}
+                      {/* Registered Employee Name */}
                       <td className="px-4 py-3.5 whitespace-nowrap">
                         <div className="flex items-center gap-2.5">
                           <img
@@ -421,25 +439,46 @@ export default function AttendanceManagement() {
                         {item.employeeCode}
                       </td>
 
-                      {/* Check In */}
-                      <td className="px-4 py-3.5 whitespace-nowrap font-mono">
-                        {item.checkInTime ? (
-                          <span className={item.lateMinutes > 0 ? "text-amber-600 font-semibold" : "text-emerald-600 font-semibold"}>
-                            {item.checkInTime} {item.lateMinutes > 0 && `(+${item.lateMinutes}m)`}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
-
-                      {/* Check Out */}
-                      <td className="px-4 py-3.5 whitespace-nowrap font-mono">
-                        {item.checkOutTime ? (
-                          <span className="font-semibold text-slate-800 dark:text-slate-200">{item.checkOutTime}</span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
+                      {/* Dynamic One-by-One Punch Columns */}
+                      {Array.from({ length: maxPunchCols }).map((_, idx) => {
+                        const punch = rowPunches[idx];
+                        if (punch) {
+                          const isCheckIn = String(punch.eventType || '').toUpperCase() === 'CHECK_IN';
+                          return (
+                            <td key={`punch-${item.id}-${idx}`} className="px-3 py-3.5 whitespace-nowrap font-mono">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold ${
+                                isCheckIn
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                              }`}>
+                                <span className="text-[9px] font-extrabold uppercase">{isCheckIn ? 'IN' : 'OUT'}</span>
+                                {formatPunchTime(punch.eventTime)}
+                              </span>
+                            </td>
+                          );
+                        }
+                        if (rowPunches.length === 0 && idx === 0 && item.checkInTime) {
+                          return (
+                            <td key={`punch-${item.id}-${idx}`} className="px-3 py-3.5 whitespace-nowrap font-mono">
+                              <span className={item.lateMinutes > 0 ? "text-amber-600 font-semibold" : "text-emerald-600 font-semibold"}>
+                                {item.checkInTime} {item.lateMinutes > 0 && `(+${item.lateMinutes}m)`}
+                              </span>
+                            </td>
+                          );
+                        }
+                        if (rowPunches.length === 0 && idx === 1 && item.checkOutTime) {
+                          return (
+                            <td key={`punch-${item.id}-${idx}`} className="px-3 py-3.5 whitespace-nowrap font-mono">
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">{item.checkOutTime}</span>
+                            </td>
+                          );
+                        }
+                        return (
+                          <td key={`punch-${item.id}-${idx}`} className="px-3 py-3.5 whitespace-nowrap font-mono text-slate-400">
+                            -
+                          </td>
+                        );
+                      })}
 
                       {/* Duration in Minutes */}
                       <td className="px-4 py-3.5 whitespace-nowrap font-mono">
@@ -539,6 +578,8 @@ export default function AttendanceManagement() {
           </div>
         </div>
       </div>
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* MULTIPLE CHECK-IN & CHECK-OUT SEQUENCE MODAL */}

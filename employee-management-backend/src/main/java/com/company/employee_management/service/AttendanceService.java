@@ -102,6 +102,23 @@ public class AttendanceService {
             throw new BadRequestException("Fingerprint attendance is disabled in company settings");
         }
 
+        // Enforce: Biometric record must be saved in Employee Records to Approve, otherwise Reject
+        if ("FACE".equals(method)) {
+            boolean hasFaceBio = biometricRegistrationRepository
+                    .findByEmployeeIdAndBiometricType(employee.getId(), "FACE").isPresent();
+            boolean hasPhoto = employee.getProfilePhotoUrl() != null && !employee.getProfilePhotoUrl().isBlank();
+            if (!hasFaceBio && !hasPhoto) {
+                throw new BadRequestException("REJECTED: Employee face record is not saved in Employee Records. Please register employee face first.");
+            }
+        }
+        if ("FINGERPRINT".equals(method)) {
+            boolean hasFpBio = biometricRegistrationRepository
+                    .findByEmployeeIdAndBiometricType(employee.getId(), "FINGERPRINT").isPresent();
+            if (!hasFpBio) {
+                throw new BadRequestException("REJECTED: Employee fingerprint record is not saved in Employee Records. Please register employee fingerprint first.");
+            }
+        }
+
         LocalDate today = LocalDate.now();
         LocalDateTime punchDateTime = LocalDateTime.now().withNano(0);
         LocalTime now = punchDateTime.toLocalTime();
@@ -563,6 +580,23 @@ public class AttendanceService {
         dto.setEarlyDepartureMinutes(att.getEarlyDepartureMinutes());
         dto.setIsManualCorrection(att.getIsManualCorrection());
         dto.setCorrectionReason(att.getCorrectionReason());
+
+        // Populate every individual punch for that employee & date in chronological order
+        if (att.getEmployee() != null && att.getAttendanceDate() != null) {
+            LocalDateTime start = att.getAttendanceDate().atStartOfDay();
+            LocalDateTime end = att.getAttendanceDate().atTime(LocalTime.MAX);
+            List<AttendanceEvent> dayEvents = eventRepository
+                    .findByEmployeeIdAndEventTimeBetweenOrderByEventTimeAsc(att.getEmployee().getId(), start, end);
+            List<AttendanceEventDTO> punchList = dayEvents.stream().map(ev -> {
+                AttendanceEventDTO eDto = new AttendanceEventDTO();
+                eDto.setId(ev.getId());
+                eDto.setEventType(ev.getEventType());
+                eDto.setPunchMethod(ev.getPunchMethod());
+                eDto.setEventTime(ev.getEventTime());
+                return eDto;
+            }).collect(Collectors.toList());
+            dto.setPunches(punchList);
+        }
         return dto;
     }
 }

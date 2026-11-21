@@ -2,6 +2,8 @@ package com.company.employee_management.dto;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 
 public class AttendanceDTO {
 
@@ -27,6 +29,7 @@ public class AttendanceDTO {
     private Integer earlyDepartureMinutes;
     private Boolean isManualCorrection;
     private String correctionReason;
+    private List<AttendanceEventDTO> punches = new ArrayList<>();
 
     public AttendanceDTO() {}
 
@@ -97,4 +100,7 @@ public class AttendanceDTO {
 
     public String getCorrectionReason() { return correctionReason; }
     public void setCorrectionReason(String correctionReason) { this.correctionReason = correctionReason; }
+
+    public List<AttendanceEventDTO> getPunches() { return punches; }
+    public void setPunches(List<AttendanceEventDTO> punches) { this.punches = punches; }
 }
